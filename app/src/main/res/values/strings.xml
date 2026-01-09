@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Tangem USDT Recovery</string>
+    <string name="scan_card">Scan Card</string>
+    <string name="send_usdt">Send USDT</string>
+    <string name="wallet_address">Wallet Address</string>
+    <string name="usdt_balance">USDT Balance</string>
+    <string name="eth_balance">ETH Balance (for gas)</string>
+    <string name="recipient_address">Recipient Address</string>
+    <string name="enter_recipient_address">Enter recipient wallet address</string>
+    <string name="scanning">Scanning card...</string>
+    <string name="loading_balance">Loading balance...</string>
+    <string name="sending">Sending transaction...</string>
+    <string name="success">Success!</string>
+    <string name="error">Error</string>
+    <string name="no_card_scanned">No card scanned yet</string>
+    <string name="insufficient_eth">Insufficient ETH for gas fees</string>
+    <string name="invalid_address">Invalid recipient address</string>
+    <string name="transaction_sent">Transaction sent!</string>
+    <string name="tx_hash">Transaction Hash:</string>
+</resources>
