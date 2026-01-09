@@ -141,3 +141,4 @@ If you find this tool useful, consider:
 - 🐛 Reporting bugs via GitHub Issues
 - 💡 Suggesting improvements
 - 🔀 Contributing code via Pull Requests
+- 🙏 Donation: 0x06bd871E7bdEa8D7Ed6e3De1D85044fc6D7eCBA2
