@@ -92,7 +92,7 @@ This app implements the Tangem card protocol directly using Android NFC APIs:
 
 ```bash
 # Clone the repository
-git clone https://github.com/yourusername/tangem-note-recovery.git
+git clone https://github.com/gdalabs/tangem-note-recovery.git
 cd tangem-note-recovery
 
 # Build debug APK
