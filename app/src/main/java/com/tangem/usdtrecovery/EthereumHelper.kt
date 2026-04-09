@@ -1,6 +1,7 @@
 package com.tangem.usdtrecovery
 
 import android.util.Log
+import com.tangem.usdtrecovery.BuildConfig
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
 import okhttp3.Request
@@ -30,24 +31,9 @@ class EthereumHelper {
         // secp256k1 curve order (n)
         private val SECP256K1_N = BigInteger("FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFEBAAEDCE6AF48A03BBFD25E8CD0364141", 16)
         private val SECP256K1_HALF_N = SECP256K1_N.shiftRight(1)
-        
-        // Popular ERC-20 tokens on Ethereum Mainnet
-        val PRESET_TOKENS = mapOf(
-            "USDT" to TokenInfo("0xdAC17F958D2ee523a2206206994597C13D831ec7", "Tether USD", "USDT", 6),
-            "USDC" to TokenInfo("0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48", "USD Coin", "USDC", 6),
-            "DAI" to TokenInfo("0x6B175474E89094C44Da98b954EescdeCB5BE3d823", "Dai Stablecoin", "DAI", 18),
-            "WETH" to TokenInfo("0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2", "Wrapped Ether", "WETH", 18),
-            "LINK" to TokenInfo("0x514910771AF9Ca656af840dff83E8264EcF986CA", "Chainlink", "LINK", 18),
-            "UNI" to TokenInfo("0x1f9840a85d5aF5bf1D1762F925BDADdC4201F984", "Uniswap", "UNI", 18)
-        )
+
+        val PRESET_TOKENS = TokenConstants.PRESET_TOKENS
     }
-    
-    data class TokenInfo(
-        val contractAddress: String,
-        val name: String,
-        val symbol: String,
-        val decimals: Int
-    )
 
     private val httpClient = OkHttpClient.Builder()
         .connectTimeout(30, TimeUnit.SECONDS)
@@ -122,13 +108,13 @@ class EthereumHelper {
     /**
      * Get token info (name, symbol, decimals) from contract
      */
-    fun getTokenInfo(tokenContract: String): Result<TokenInfo> {
+    fun getTokenInfo(tokenContract: String): Result<TokenConstants.TokenInfo> {
         return try {
             val name = getTokenName(tokenContract)
             val symbol = getTokenSymbol(tokenContract)
             val decimals = getTokenDecimals(tokenContract)
-            
-            Result.success(TokenInfo(tokenContract, name, symbol, decimals))
+
+            Result.success(TokenConstants.TokenInfo(symbol, name, tokenContract, decimals))
         } catch (e: Exception) {
             Log.e(TAG, "Error getting token info", e)
             Result.failure(e)
@@ -231,7 +217,7 @@ class EthereumHelper {
             )
 
             val txHash = encodeTransactionForSigning(txData)
-            Log.d(TAG, "Transaction hash for signing: ${txHash.toHexString()}")
+            if (BuildConfig.DEBUG) Log.d(TAG, "Transaction hash for signing: ${txHash.toHexString()}")
             Result.success(Pair(txData, txHash))
         } catch (e: Exception) {
             Log.e(TAG, "Error creating transaction", e)
@@ -246,31 +232,35 @@ class EthereumHelper {
     ): Result<String> {
         return try {
             Log.d(TAG, "=== Broadcasting Transaction ===")
-            Log.d(TAG, "Raw signature (${signature.size} bytes): ${signature.toHexString()}")
-            Log.d(TAG, "Public key (${publicKey.size} bytes): ${publicKey.toHexString()}")
+            if (BuildConfig.DEBUG) {
+                Log.d(TAG, "Raw signature (${signature.size} bytes): ${signature.toHexString()}")
+                Log.d(TAG, "Public key (${publicKey.size} bytes): ${publicKey.toHexString()}")
+            }
             
             // Parse signature - handle both DER and raw formats
             val (r, s) = parseSignature(signature)
-            Log.d(TAG, "Parsed r: ${r.toString(16)}")
-            Log.d(TAG, "Parsed s: ${s.toString(16)}")
+            if (BuildConfig.DEBUG) {
+                Log.d(TAG, "Parsed r: ${r.toString(16)}")
+                Log.d(TAG, "Parsed s: ${s.toString(16)}")
+            }
             
             // Normalize s to low-S form (required by Ethereum)
             val normalizedS = if (s > SECP256K1_HALF_N) {
-                Log.d(TAG, "Normalizing s to low-S form")
+                if (BuildConfig.DEBUG) Log.d(TAG, "Normalizing s to low-S form")
                 SECP256K1_N.subtract(s)
             } else {
                 s
             }
-            Log.d(TAG, "Normalized s: ${normalizedS.toString(16)}")
+            if (BuildConfig.DEBUG) Log.d(TAG, "Normalized s: ${normalizedS.toString(16)}")
             
             val txHash = encodeTransactionForSigning(txData)
-            Log.d(TAG, "Transaction hash: ${txHash.toHexString()}")
-            
+            if (BuildConfig.DEBUG) Log.d(TAG, "Transaction hash: ${txHash.toHexString()}")
+
             val recoveryId = findRecoveryId(txHash, r, normalizedS, publicKey)
             Log.d(TAG, "Recovery ID: $recoveryId")
-            
+
             val signedTx = createSignedTransaction(txData, r, normalizedS, recoveryId)
-            Log.d(TAG, "Signed transaction: ${signedTx.toHexString()}")
+            if (BuildConfig.DEBUG) Log.d(TAG, "Signed transaction: ${signedTx.toHexString()}")
             
             val txHashResult = sendRawTransaction(signedTx)
             Log.d(TAG, "Transaction hash result: $txHashResult")
@@ -282,22 +272,22 @@ class EthereumHelper {
     }
     
     private fun parseSignature(signature: ByteArray): Pair<BigInteger, BigInteger> {
-        Log.d(TAG, "Parsing signature of ${signature.size} bytes")
-        
+        if (BuildConfig.DEBUG) Log.d(TAG, "Parsing signature of ${signature.size} bytes")
+
         if (signature.isNotEmpty() && signature[0] == 0x30.toByte()) {
-            Log.d(TAG, "Detected DER format signature")
+            if (BuildConfig.DEBUG) Log.d(TAG, "Detected DER format signature")
             return parseDerSignature(signature)
         }
         
         if (signature.size == 64) {
-            Log.d(TAG, "Detected raw 64-byte signature")
+            if (BuildConfig.DEBUG) Log.d(TAG, "Detected raw 64-byte signature")
             val r = BigInteger(1, signature.copyOfRange(0, 32))
             val s = BigInteger(1, signature.copyOfRange(32, 64))
             return Pair(r, s)
         }
         
         if (signature.size >= 64) {
-            Log.d(TAG, "Signature is ${signature.size} bytes, trying to extract r and s")
+            if (BuildConfig.DEBUG) Log.d(TAG, "Signature is ${signature.size} bytes, trying to extract r and s")
             val r = BigInteger(1, signature.copyOfRange(0, 32))
             val s = BigInteger(1, signature.copyOfRange(32, 64))
             return Pair(r, s)

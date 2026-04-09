@@ -25,28 +25,14 @@ import java.math.BigDecimal
 import java.math.BigInteger
 import java.math.RoundingMode
 
+import com.tangem.usdtrecovery.TokenConstants.TokenInfo
+
 class MainActivity : AppCompatActivity() {
 
     companion object {
         private const val TAG = "MainActivity"
-        
-        // Popular ERC-20 tokens on Ethereum Mainnet
-        val PRESET_TOKENS = mapOf(
-            "USDT" to TokenInfo("USDT", "Tether USD", "0xdAC17F958D2ee523a2206206994597C13D831ec7", 6),
-            "USDC" to TokenInfo("USDC", "USD Coin", "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48", 6),
-            "DAI" to TokenInfo("DAI", "Dai Stablecoin", "0x6B175474E89094C44Da98b954EescdeCB5BE3d823", 18),
-            "WETH" to TokenInfo("WETH", "Wrapped Ether", "0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2", 18),
-            "LINK" to TokenInfo("LINK", "Chainlink Token", "0x514910771AF9Ca656af840dff83E8264EcF986CA", 18),
-            "UNI" to TokenInfo("UNI", "Uniswap", "0x1f9840a85d5aF5bf1D1762F925BDADdC4201F984", 18)
-        )
+        val PRESET_TOKENS = TokenConstants.PRESET_TOKENS
     }
-
-    data class TokenInfo(
-        val symbol: String,
-        val name: String,
-        val contractAddress: String,
-        val decimals: Int
-    )
 
     private lateinit var binding: ActivityMainBinding
     private var nfcAdapter: NfcAdapter? = null
@@ -125,6 +111,34 @@ class MainActivity : AppCompatActivity() {
             pendingAction = PendingAction.SCAN_CARD
             showProgress(true)
             showStatus("Please tap your Tangem Note card to the back of your phone...")
+        }
+
+        // Custom PIN toggle
+        binding.btnTogglePin.setOnClickListener {
+            val pinSection = binding.llCustomPin
+            if (pinSection.visibility == View.VISIBLE) {
+                pinSection.visibility = View.GONE
+                binding.btnTogglePin.text = "Custom PIN"
+            } else {
+                pinSection.visibility = View.VISIBLE
+                binding.btnTogglePin.text = "Hide PIN"
+            }
+        }
+
+        // Apply custom PINs
+        binding.btnApplyPin.setOnClickListener {
+            val pin1 = binding.etPin1.text.toString()
+            val pin2 = binding.etPin2.text.toString()
+            cardManager.setCustomPin1(pin1.ifEmpty { null })
+            cardManager.setCustomPin2(pin2.ifEmpty { null })
+            val msg = buildString {
+                append("PINs updated: ")
+                append(if (pin1.isEmpty()) "PIN1=default" else "PIN1=custom")
+                append(", ")
+                append(if (pin2.isEmpty()) "PIN2=default" else "PIN2=custom")
+            }
+            Toast.makeText(this, msg, Toast.LENGTH_SHORT).show()
+            showStatus(msg)
         }
 
         // Token chip selection
@@ -273,8 +287,7 @@ class MainActivity : AppCompatActivity() {
                 }
                 
                 tokenInfoResult.fold(
-                    onSuccess = { ethTokenInfo ->
-                        val token = TokenInfo(ethTokenInfo.symbol, ethTokenInfo.name, contractAddress, ethTokenInfo.decimals)
+                    onSuccess = { token ->
                         selectedToken = token
                         
                         // Load balance

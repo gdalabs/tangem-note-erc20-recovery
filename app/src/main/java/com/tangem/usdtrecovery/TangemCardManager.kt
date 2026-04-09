@@ -3,6 +3,7 @@ package com.tangem.usdtrecovery
 import android.nfc.Tag
 import android.nfc.tech.IsoDep
 import android.util.Log
+import com.tangem.usdtrecovery.BuildConfig
 import org.bouncycastle.jcajce.provider.digest.Keccak
 import org.bouncycastle.math.ec.ECPoint
 import org.bouncycastle.jce.ECNamedCurveTable
@@ -77,7 +78,32 @@ class TangemCardManager {
     }
 
     private var workingPin: ByteArray = DEFAULT_PIN
+    private var workingPin2: ByteArray = DEFAULT_PIN2
     private var storedCardId: ByteArray? = null
+
+    /**
+     * Set a custom PIN1 (access code). Pass null to revert to the default PIN.
+     * The value will be SHA-256 hashed before use.
+     */
+    fun setCustomPin1(pin: String?) {
+        workingPin = if (pin.isNullOrEmpty()) {
+            DEFAULT_PIN
+        } else {
+            java.security.MessageDigest.getInstance("SHA-256").digest(pin.toByteArray(Charsets.UTF_8))
+        }
+    }
+
+    /**
+     * Set a custom PIN2 (signing passcode). Pass null to revert to the default PIN2.
+     * The value will be SHA-256 hashed before use.
+     */
+    fun setCustomPin2(pin: String?) {
+        workingPin2 = if (pin.isNullOrEmpty()) {
+            DEFAULT_PIN2
+        } else {
+            java.security.MessageDigest.getInstance("SHA-256").digest(pin.toByteArray(Charsets.UTF_8))
+        }
+    }
 
     /**
      * Read card information including public key
@@ -102,7 +128,7 @@ class TangemCardManager {
                 }
 
                 val tlvData = buildPinOnlyTlv()
-                Log.d(TAG, "TLV data (PIN1 only): ${tlvData.toHexString()}")
+                if (BuildConfig.DEBUG) Log.d(TAG, "TLV data (PIN1 only): ${tlvData.toHexString()}")
                 
                 val commands = listOf(
                     "SDK Extended (no Le)" to buildSdkExtendedApdu(tlvData),
@@ -113,7 +139,7 @@ class TangemCardManager {
 
                 var lastError = ""
                 for ((name, command) in commands) {
-                    Log.d(TAG, "Trying $name: ${command.toHexString()}")
+                    if (BuildConfig.DEBUG) Log.d(TAG, "Trying $name: ${command.toHexString()}")
                     
                     try {
                         val response = isoDep.transceive(command)
@@ -145,8 +171,8 @@ class TangemCardManager {
     private fun buildPinOnlyTlv(): ByteArray {
         val output = ByteArrayOutputStream()
         output.write(TAG_PIN)
-        output.write(DEFAULT_PIN.size)
-        output.write(DEFAULT_PIN)
+        output.write(workingPin.size)
+        output.write(workingPin)
         return output.toByteArray()
     }
 
@@ -222,22 +248,22 @@ class TangemCardManager {
 
                 val cid = cardId ?: storedCardId ?: return Result.failure(Exception("Card ID not available. Please read the card first."))
 
-                Log.d(TAG, "Signing hash: ${hash.toHexString()}")
+                if (BuildConfig.DEBUG) Log.d(TAG, "Signing hash: ${hash.toHexString()}")
                 val signCommand = buildSignCommand(hash, cid)
-                Log.d(TAG, "SIGN command: ${signCommand.toHexString()}")
+                if (BuildConfig.DEBUG) Log.d(TAG, "SIGN command: ${signCommand.toHexString()}")
                 
                 // Retry loop for SW_NEED_PAUSE
                 var retryCount = 0
                 while (retryCount < MAX_PAUSE_RETRIES) {
                     val signResponse = isoDep.transceive(signCommand)
                     val sw = getStatusWord(signResponse)
-                    Log.d(TAG, "SIGN response (attempt ${retryCount + 1}): length=${signResponse.size}, SW=${sw.toString(16)}")
+                    if (BuildConfig.DEBUG) Log.d(TAG, "SIGN response (attempt ${retryCount + 1}): length=${signResponse.size}, SW=${sw.toString(16)}")
 
                     when (sw) {
                         SW_SUCCESS -> {
                             // Success! Parse and return the signature
                             val signature = parseSignResponse(signResponse)
-                            Log.d(TAG, "Signature obtained: ${signature.toHexString()}")
+                            if (BuildConfig.DEBUG) Log.d(TAG, "Signature obtained: ${signature.toHexString()}")
                             return Result.success(SignResult(signature))
                         }
                         SW_NEED_PAUSE -> {
@@ -298,7 +324,7 @@ class TangemCardManager {
             write(0x00)
         }.toByteArray()
 
-        Log.d(TAG, "SELECT APDU: ${selectCommand.toHexString()}")
+        if (BuildConfig.DEBUG) Log.d(TAG, "SELECT APDU: ${selectCommand.toHexString()}")
         return isoDep.transceive(selectCommand)
     }
 
@@ -321,8 +347,8 @@ class TangemCardManager {
             write(workingPin)
             
             write(TAG_PIN2)
-            write(DEFAULT_PIN2.size)
-            write(DEFAULT_PIN2)
+            write(workingPin2.size)
+            write(workingPin2)
         }.toByteArray()
 
         return ByteArrayOutputStream().apply {
@@ -341,11 +367,13 @@ class TangemCardManager {
         val data = response.copyOfRange(0, response.size - 2)
         val tlvMap = parseTlv(data)
         
-        Log.d(TAG, "=== TLV Tags in Response ===")
-        for ((tag, value) in tlvMap) {
-            Log.d(TAG, "Tag 0x${tag.toString(16)}: ${value.size} bytes = ${value.toHexString()}")
+        if (BuildConfig.DEBUG) {
+            Log.d(TAG, "=== TLV Tags in Response ===")
+            for ((tag, value) in tlvMap) {
+                Log.d(TAG, "Tag 0x${tag.toString(16)}: ${value.size} bytes = ${value.toHexString()}")
+            }
+            Log.d(TAG, "============================")
         }
-        Log.d(TAG, "============================")
 
         val cardIdBytes = tlvMap[TAG_CARD_ID] ?: throw Exception("Card ID not found in response")
         storedCardId = cardIdBytes
@@ -369,7 +397,7 @@ class TangemCardManager {
             throw Exception("Public key not found in response. Available tags: ${tlvMap.keys.map { "0x${it.toString(16)}" }}")
         }
 
-        Log.d(TAG, "Raw public key (${publicKey.size} bytes): ${publicKey.toHexString()}")
+        if (BuildConfig.DEBUG) Log.d(TAG, "Raw public key (${publicKey.size} bytes): ${publicKey.toHexString()}")
         
         val walletAddress = publicKeyToAddress(publicKey)
         Log.d(TAG, "Derived wallet address: $walletAddress")
@@ -391,11 +419,13 @@ class TangemCardManager {
         val data = response.copyOfRange(0, response.size - 2)
         val tlvMap = parseTlv(data)
         
-        Log.d(TAG, "=== SIGN Response TLV Tags ===")
-        for ((tag, value) in tlvMap) {
-            Log.d(TAG, "Tag 0x${tag.toString(16)}: ${value.size} bytes = ${value.toHexString()}")
+        if (BuildConfig.DEBUG) {
+            Log.d(TAG, "=== SIGN Response TLV Tags ===")
+            for ((tag, value) in tlvMap) {
+                Log.d(TAG, "Tag 0x${tag.toString(16)}: ${value.size} bytes = ${value.toHexString()}")
+            }
+            Log.d(TAG, "==============================")
         }
-        Log.d(TAG, "==============================")
         
         return tlvMap[TAG_WALLET_SIGNATURE] ?: throw Exception("Signature not found in response")
     }
@@ -454,14 +484,14 @@ class TangemCardManager {
             }
         }
 
-        Log.d(TAG, "Key to hash (${uncompressedKey.size} bytes): ${uncompressedKey.toHexString()}")
+        if (BuildConfig.DEBUG) Log.d(TAG, "Key to hash (${uncompressedKey.size} bytes): ${uncompressedKey.toHexString()}")
         
         val keccak = Keccak.Digest256()
         val hash = keccak.digest(uncompressedKey)
         val addressBytes = hash.copyOfRange(12, 32)
         val address = "0x" + addressBytes.toHexString()
         
-        Log.d(TAG, "Keccak256 hash: ${hash.toHexString()}")
+        if (BuildConfig.DEBUG) Log.d(TAG, "Keccak256 hash: ${hash.toHexString()}")
         Log.d(TAG, "Final address: $address")
         
         return address
