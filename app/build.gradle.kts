@@ -11,13 +11,18 @@ android {
         applicationId = "com.tangem.usdtrecovery"
         minSdk = 24
         targetSdk = 34
-        versionCode = 1
-        versionName = "1.0"
+        versionCode = 2
+        versionName = "1.0.1-rc.1"
+        manifestPlaceholders["appLabel"] = "@string/app_name"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
 
     buildTypes {
+        debug {
+            applicationIdSuffix = ".preview"
+            manifestPlaceholders["appLabel"] = "Tangem Recovery Preview"
+        }
         release {
             isMinifyEnabled = false
             proguardFiles(
@@ -34,6 +39,10 @@ android {
 
     kotlinOptions {
         jvmTarget = "17"
+    }
+
+    testOptions {
+        unitTests.isReturnDefaultValues = true
     }
 
     buildFeatures {

@@ -274,25 +274,16 @@ class EthereumHelper {
     private fun parseSignature(signature: ByteArray): Pair<BigInteger, BigInteger> {
         if (BuildConfig.DEBUG) Log.d(TAG, "Parsing signature of ${signature.size} bytes")
 
+        if (signature.size == 64) {
+            val r = BigInteger(1, signature.copyOfRange(0, 32))
+            val s = BigInteger(1, signature.copyOfRange(32, 64))
+            return Pair(r, s)
+        }
+
         if (signature.isNotEmpty() && signature[0] == 0x30.toByte()) {
-            if (BuildConfig.DEBUG) Log.d(TAG, "Detected DER format signature")
             return parseDerSignature(signature)
         }
-        
-        if (signature.size == 64) {
-            if (BuildConfig.DEBUG) Log.d(TAG, "Detected raw 64-byte signature")
-            val r = BigInteger(1, signature.copyOfRange(0, 32))
-            val s = BigInteger(1, signature.copyOfRange(32, 64))
-            return Pair(r, s)
-        }
-        
-        if (signature.size >= 64) {
-            if (BuildConfig.DEBUG) Log.d(TAG, "Signature is ${signature.size} bytes, trying to extract r and s")
-            val r = BigInteger(1, signature.copyOfRange(0, 32))
-            val s = BigInteger(1, signature.copyOfRange(32, 64))
-            return Pair(r, s)
-        }
-        
+
         throw Exception("Unknown signature format: ${signature.size} bytes")
     }
     
@@ -377,8 +368,7 @@ class EthereumHelper {
             }
         }
         
-        Log.w(TAG, "Could not find recovery ID, defaulting to 0")
-        return 0
+        throw IllegalArgumentException("Signature does not match the scanned card public key")
     }
 
     private fun recoverPublicKey(
@@ -576,10 +566,10 @@ class EthereumHelper {
 
         val totalLength = encoded.sumOf { it.size }
         return if (totalLength < 56) {
-            byteArrayOf((0xc0 + totalLength).toByte()) + encoded.reduce { acc, bytes -> acc + bytes }
+            byteArrayOf((0xc0 + totalLength).toByte()) + encoded.fold(byteArrayOf()) { acc, bytes -> acc + bytes }
         } else {
             val lengthBytes = bigIntegerToBytes(BigInteger.valueOf(totalLength.toLong()))
-            byteArrayOf((0xf7 + lengthBytes.size).toByte()) + lengthBytes + encoded.reduce { acc, bytes -> acc + bytes }
+            byteArrayOf((0xf7 + lengthBytes.size).toByte()) + lengthBytes + encoded.fold(byteArrayOf()) { acc, bytes -> acc + bytes }
         }
     }
 
